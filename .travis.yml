@@ -2,4 +2,4 @@ language: python
 sudo: required
 script:
 - set -x
-- sudo ls -laR /
+- sudo ls -laR ~/
