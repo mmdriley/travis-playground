@@ -1,4 +1,5 @@
 language: python
 sudo: required
 script:
-- cat ~/build.sh
+- sleep 120
+- cat words.txt
