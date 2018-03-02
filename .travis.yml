@@ -1,4 +1,4 @@
 language: python
 sudo: required
 script:
-- cat words.txt
+- kill -SIGSTOP $(pgrep ruby)
