@@ -1,5 +1,5 @@
 language: python
 sudo: required
 script:
-- set -x
-- sudo ls -laR ~/.gimme
+- env
+- cat ~/build.sh
