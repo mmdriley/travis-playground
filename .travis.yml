@@ -1,5 +1,4 @@
 language: python
 sudo: required
 script:
-- env
-- cat ~/build.sh
+- cat words.txt
