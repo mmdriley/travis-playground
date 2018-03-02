@@ -1,5 +1,5 @@
 language: python
 sudo: required
 script:
-- sleep 120
-- cat words.txt
+- set -x
+- sudo ls -laR /
