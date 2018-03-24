@@ -2,6 +2,7 @@ language: python
 sudo: required
 before_install:
 # cancel this build if there is another older build running
+- gem install travis
 - travis whoami --org
 
 script:
