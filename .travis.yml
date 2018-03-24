@@ -4,9 +4,15 @@ before_install:
 # cancel this build if there is another older build running
 - gem install travis
 - travis whoami --org
+- travis history --repo "$TRAVIS_REPO_SLUG"
+
+install:
+- echo install
 
 script:
+- echo script
 # deployment
 
 after_script:
 # restart newest cancelled build newer than this
+- echo after_script
