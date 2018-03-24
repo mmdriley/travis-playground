@@ -1,4 +1,11 @@
 language: python
 sudo: required
+before_install:
+# cancel this build if there is another older build running
+- travis whoami --org
+
 script:
-- kill -SIGSTOP $(pgrep ruby)
+# deployment
+
+after_script:
+# restart newest cancelled build newer than this
