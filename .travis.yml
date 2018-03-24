@@ -1,18 +1,25 @@
-language: python
 sudo: required
+
+language: go
+go:
+- "1.10"
+
 before_install:
 # cancel this build if there is another older build running
-- gem install travis
-- travis whoami --org
-- travis history --repo "$TRAVIS_REPO_SLUG"
+# maybe retry after 30 seconds
+- go install ./buildtool
+- buildtool start
 
-install:
-- echo install
+# this one should use a higher limit because there may be multiple new builds that will *all* die after seeing older builds exist.
+# /repo/pulumi%2fpulumi-service/builds?build.state=created,queued,received,started&build.event_type=push&build.branch=master&sort_by=id:desc
+# parameters: TRAVIS_REPO_SLUG, TRAVIS_BRANCH, TRAVIS_EVENT_TYPE
+# TRAVIS_BUILD_ID or TRAVIS_BUILD_NUMBER
 
-script:
-- echo script
-# deployment
+# default install: `go get -t ./...`
+# default script: `make` (if Makefile) or `go test -v ./...`
 
 after_script:
 # restart newest cancelled build newer than this
-- echo after_script
+# /repo/pulumi%2fpulumi-service/builds?build.state=canceled&build.event_type=push&build.branch=master&sort_by=id:desc&limit=1
+# TRAVIS_BUILD_ID or TRAVIS_BUILD_NUMBER
+- buildtool finish
