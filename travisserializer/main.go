@@ -61,8 +61,6 @@ func runningBuilds() []Build {
 
 	path := mustParseURL(fmt.Sprintf("/repo/%v/builds?%v", url.PathEscape(travisRepoSlug), vs.Encode()))
 
-	fmt.Printf("%v\n", path.String())
-
 	resp, _, errs := gorequest.New().
 		Get(travisEndpoint.ResolveReference(path).String()).
 		Set("Travis-API-Version", "3").
@@ -70,7 +68,6 @@ func runningBuilds() []Build {
 		EndStruct(&builds)
 
 	if errs != nil || resp.StatusCode != 200 {
-		fmt.Fprintf(os.Stderr, "%+v", errs)
 		panic("can't list running builds")
 	}
 

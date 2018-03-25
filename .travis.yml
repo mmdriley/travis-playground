@@ -17,6 +17,9 @@ before_install:
 # default install: `go get -t ./...`
 # default script: `make` (if Makefile) or `go test -v ./...`
 
+script:
+- sleep 60
+
 after_script:
 # restart newest cancelled build newer than this
 # /repo/pulumi%2fpulumi-service/builds?build.state=canceled&build.event_type=push&build.branch=master&sort_by=id:desc&limit=1
