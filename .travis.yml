@@ -18,7 +18,7 @@ before_install:
 # default script: `make` (if Makefile) or `go test -v ./...`
 
 script:
-- sleep 30
+- sleep 300
 
 after_script:
 # restart newest cancelled build newer than this
