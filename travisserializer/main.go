@@ -59,7 +59,7 @@ func runningBuilds() []Build {
 	vs.Add("build.branch", travisBranch)
 	vs.Add("sort_by", "id:desc")
 
-	path := mustParseURL(fmt.Sprintf("/repos/%v/builds?%v", url.PathEscape(travisRepoSlug), vs.Encode()))
+	path := mustParseURL(fmt.Sprintf("/repo/%v/builds?%v", url.PathEscape(travisRepoSlug), vs.Encode()))
 
 	fmt.Printf("%v\n", path.String())
 
