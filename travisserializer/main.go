@@ -73,7 +73,7 @@ func runningBuilds() []Build {
 		EndStruct(&builds)
 
 	if errs != nil || resp.StatusCode != http.StatusOK {
-		panic("can't list running builds")
+		panic(fmt.Errorf("can't list running builds: %+v, %v", errs, resp.StatusCode))
 	}
 
 	return builds.Builds
@@ -117,8 +117,8 @@ func cancelThisBuild() {
 		Set("Authorization", "token "+travisToken).
 		End()
 
-	if errs != nil || resp.StatusCode != http.StatusOK {
-		panic("couldn't cancel build")
+	if errs != nil || resp.StatusCode != http.StatusAccepted {
+		panic(fmt.Errorf("couldn't cancel build: %+v, %v", errs, resp.StatusCode))
 	}
 
 	// Wait for the build to be cancelled. Travis' build timeout is 2 hours.
