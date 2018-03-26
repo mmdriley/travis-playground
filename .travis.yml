@@ -7,7 +7,7 @@ go:
 env:
   global:
     - ONEBUILD_BRANCHES=master,staging
-    - N=4
+    - N=5
 
 before_install:
 # any failed command here fails the build immediately.
