@@ -47,7 +47,7 @@ var (
 )
 
 // https://developer.travis-ci.org/resource/build#Build
-// This definition only includes fields we need here.
+// This definition only includes fields we need.
 type Build struct {
 	ID int
 
