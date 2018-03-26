@@ -1,21 +1,20 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strconv"
 	"time"
-
-	"github.com/parnurzeal/gorequest"
 )
 
-func requireEnv(key string) string {
+func mustGetenv(key string) string {
 	value := os.Getenv(key)
 	if value == "" {
-		fmt.Fprintf(os.Stderr, "ERROR: %v is not set\n", key)
-		os.Exit(1)
+		log.Fatalf("ERROR: %v is not set\n", key)
 	}
 
 	return value
@@ -24,126 +23,164 @@ func requireEnv(key string) string {
 func mustParseURL(v string) *url.URL {
 	url, err := url.Parse(v)
 	if err != nil {
-		panic(fmt.Errorf("can't parse %v as URL", v))
+		log.Fatalf("can't parse %v as URL", v)
 	}
 	return url
 }
 
+func mustAtoi(v string) int {
+	i, err := strconv.Atoi(v)
+	if err != nil {
+		log.Fatalf("can't convert %v to int", v)
+	}
+	return i
+}
+
 var (
-	travisEndpoint = mustParseURL(requireEnv("TRAVIS_ENDPOINT"))
-	travisToken    = requireEnv("TRAVIS_TOKEN")
+	travisEndpoint = mustParseURL(mustGetenv("TRAVIS_ENDPOINT"))
+	travisToken    = mustGetenv("TRAVIS_TOKEN")
 
-	travisBuildID     = requireEnv("TRAVIS_BUILD_ID")
-	travisBuildNumber = requireEnv("TRAVIS_BUILD_NUMBER")
+	travisBuildID = mustAtoi(mustGetenv("TRAVIS_BUILD_ID"))
 
-	travisEventType = requireEnv("TRAVIS_EVENT_TYPE")
-
-	travisBranch   = requireEnv("TRAVIS_BRANCH")
-	travisRepoSlug = requireEnv("TRAVIS_REPO_SLUG")
+	travisBranch   = mustGetenv("TRAVIS_BRANCH")
+	travisRepoSlug = mustGetenv("TRAVIS_REPO_SLUG")
 )
 
+// https://developer.travis-ci.org/resource/build#Build
+// This definition only includes fields we need here.
 type Build struct {
 	ID int
 
 	Number string
 	State  string
+
+	// e.g. "2006-01-02T15:04:05Z" or nil if not started
+	StartedAt *string `json:"started_at"`
 }
 
+// https://developer.travis-ci.org/resource/builds#Builds
 type Builds struct {
 	Builds []Build
 }
 
-// running push builds, in this repository, on this branch
-// sorted by ID descending
-func runningBuilds() []Build {
-	var builds Builds
-
-	vs := url.Values{}
-	vs.Add("build.state", "created,queued,received,started")
-	vs.Add("build.event_type", "push")
-	vs.Add("build.branch", travisBranch)
-	vs.Add("sort_by", "id:desc")
-
-	path := mustParseURL(fmt.Sprintf("/repo/%v/builds?%v", url.PathEscape(travisRepoSlug), vs.Encode()))
-
-	resp, _, errs := gorequest.New().
-		Get(travisEndpoint.ResolveReference(path).String()).
-		Set("Travis-API-Version", "3").
-		Set("Authorization", "token "+travisToken).
-		EndStruct(&builds)
-
-	if errs != nil || resp.StatusCode != http.StatusOK {
-		panic(fmt.Errorf("can't list running builds: %+v, %v", errs, resp.StatusCode))
+// If bodyValue is non-nil, decode body as JSON into it.
+func callTravisAPI(method, path string, expectStatus int, bodyValue interface{}) {
+	url := travisEndpoint.ResolveReference(mustParseURL(path))
+	req, err := http.NewRequest(method, url.String(), nil)
+	if err != nil {
+		log.Fatalf("couldn't create request to %v", url)
 	}
 
-	return builds.Builds
+	req.Header.Add("Travis-API-Version", "3")
+	req.Header.Add("Authorization", "token "+travisToken)
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Fatalf("request to %v failed: %v", url, err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != expectStatus {
+		log.Fatalf("request to %v failed: %v", url, res.Status)
+	}
+
+	if bodyValue != nil {
+		err = json.NewDecoder(res.Body).Decode(bodyValue)
+		if err != nil {
+			log.Fatalf("can't decode response as %T: %v", bodyValue, err)
+		}
+	}
 }
 
-func isOldestRunningBuild() bool {
-	builds := runningBuilds()
-	foundThisBuild := false
+// Return the build
+// - in this repository
+// - of this branch
+// - started by a `push` event
+// - with a state in `states`, or in any state if `states` is empty
+// - that sorts first by `sortBy`.
+// Panics on error or if no matching build is found.
+func firstMatchingBuild(states, sortBy string) Build {
+	vs := url.Values{}
+	vs.Add("build.event_type", "push")
+	vs.Add("build.branch", travisBranch)
+	vs.Add("sort_by", "started_at")
+	if states != "" {
+		vs.Add("build.state", states)
+	}
+	vs.Add("limit", "1")
 
-	// The list of builds is ordered from newest to oldest.
-	for _, build := range builds {
-		if foundThisBuild {
-			// There was a running build older than this one.
-			fmt.Printf("Found older build %v (%v) in state %v\n", build.Number, build.ID, build.State)
-			return false
-		}
+	var builds Builds
 
-		if strconv.Itoa(build.ID) == travisBuildID {
-			foundThisBuild = true
-		}
+	path := fmt.Sprintf("/repo/%v/builds?%v", url.PathEscape(travisRepoSlug), vs.Encode())
+	callTravisAPI("GET", path, http.StatusOK, &builds)
+
+	if len(builds.Builds) == 0 {
+		// We should at least see ourselves.
+		log.Fatal("found no builds")
 	}
 
-	// If we found this build, it was last in the list.
+	return builds.Builds[0]
+}
 
-	if !foundThisBuild {
-		// Sanity check -- we should always see the current build in the list.
-		panic(fmt.Errorf("couldn't find this build, %v", travisBuildID))
-	}
+func earliestStartedBuild() Build {
+	return firstMatchingBuild("started", "started_at")
+}
 
-	return true
+func newestFinishedBuild() Build {
+	return firstMatchingBuild("passed,failed,errored", "id:desc")
+}
+
+func newestBuild() Build {
+	return firstMatchingBuild("", "id:desc")
 }
 
 func cancelThisBuild() {
-	fmt.Printf("Cancelling this build...\n")
+	log.Print("Cancelling this build...")
 
-	path := mustParseURL(fmt.Sprintf("/build/%v/cancel", travisBuildID))
-
-	resp, _, errs := gorequest.New().
-		Post(travisEndpoint.ResolveReference(path).String()).
-		Set("Travis-API-Version", "3").
-		Set("Authorization", "token "+travisToken).
-		End()
-
-	if errs != nil || resp.StatusCode != http.StatusAccepted {
-		panic(fmt.Errorf("couldn't cancel build: %+v, %v", errs, resp.StatusCode))
-	}
+	path := fmt.Sprintf("/build/%v/cancel", travisBuildID)
+	callTravisAPI("POST", path, http.StatusAccepted, nil)
 
 	// Wait for the build to be cancelled. Travis' build timeout is 2 hours.
 	time.Sleep(3 * time.Hour)
 }
 
-func restartNewestCancelledBuild() {
+func restartBuild(id int) {
+	path := fmt.Sprintf("/build/%v/restart", id)
+	callTravisAPI("POST", path, http.StatusAccepted, nil)
 }
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "Usage: %v {start|finish}\n", os.Args[0])
-		os.Exit(1)
+		log.Fatalf("Usage: %v {start|finish}\n", os.Args[0])
 	}
 
 	command := os.Args[1]
-
-	if command == "start" {
-		if !isOldestRunningBuild() {
+	switch command {
+	case "start":
+		// Check we're the running build with the earliest start time.
+		earliest := earliestStartedBuild()
+		if earliest.ID != travisBuildID {
+			log.Printf("Found an older build running: %v (%v) started at %v\n", earliest.Number, earliest.ID, *earliest.StartedAt)
 			cancelThisBuild()
 		}
-	} else if command == "finish" {
-		restartNewestCancelledBuild()
-	} else {
-		fmt.Fprintf(os.Stderr, "ERROR: Invalid command %v\n", command)
-		os.Exit(1)
+
+		// Check there are no newer, finished builds.
+		finished := newestFinishedBuild()
+		if finished.ID > travisBuildID {
+			log.Printf("Found a newer finished build: %v (%v), state %v\n", finished.Number, finished.ID, finished.State)
+			cancelThisBuild()
+		}
+
+		// Okay to proceed.
+
+	case "finish":
+		newest := newestBuild()
+		if newest.State == "canceled" {
+			log.Printf("Restarting canceled build %v (%v)\n", newest.Number, newest.ID)
+			restartBuild(newest.ID)
+		}
+
+	default:
+		log.Fatalf("Invalid command %v\n", command)
 	}
 }
