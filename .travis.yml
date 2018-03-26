@@ -4,18 +4,22 @@ language: go
 go:
 - "1.10"
 
+env:
+- ONEBUILD_BRANCHES=master,staging
+- N=1
+
 before_install:
 # any failed command here fails the build immediately.
 # cancel this build if there is another older build running
 # maybe retry after 30 seconds
-- go get -u ./travisserializer
-- travisserializer start
+- go install ./onebuild
+- onebuild start
 
 # default install: `go get -t ./...`
 # default script: `make` (if Makefile) or `go test -v ./...`
 
 script:
-- sleep 30
+- sleep 120
 
 after_script:
-- travisserializer finish
+- onebuild finish
