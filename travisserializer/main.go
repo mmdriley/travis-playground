@@ -103,7 +103,7 @@ func firstMatchingBuild(states, sortBy string) Build {
 	vs := url.Values{}
 	vs.Add("build.event_type", "push")
 	vs.Add("build.branch", travisBranch)
-	vs.Add("sort_by", "started_at")
+	vs.Add("sort_by", sortBy)
 	if states != "" {
 		vs.Add("build.state", states)
 	}
