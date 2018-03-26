@@ -11,16 +11,11 @@ before_install:
 - go get -u ./travisserializer
 - travisserializer start
 
-# this one should use a higher limit because there may be multiple new builds that will *all* die after seeing older builds exist.
-# /repo/pulumi%2fpulumi-service/builds?build.state=created,queued,received,started&build.event_type=push&build.branch=master&sort_by=id:desc
-
 # default install: `go get -t ./...`
 # default script: `make` (if Makefile) or `go test -v ./...`
 
 script:
-- sleep 30
+- sleep 300
 
 after_script:
-# restart newest cancelled build newer than this
-# /repo/pulumi%2fpulumi-service/builds?build.state=canceled&build.event_type=push&build.branch=master&sort_by=id:desc&limit=1
 - travisserializer finish
