@@ -5,8 +5,9 @@ go:
 - "1.10"
 
 env:
-- ONEBUILD_BRANCHES=master,staging
-- N=3
+  global:
+    - ONEBUILD_BRANCHES=master,staging
+    - N=3
 
 before_install:
 # any failed command here fails the build immediately.
