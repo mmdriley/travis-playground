@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -23,7 +24,7 @@ func mustGetenv(key string) string {
 func mustParseURL(v string) *url.URL {
 	url, err := url.Parse(v)
 	if err != nil {
-		log.Fatalf("can't parse %v as URL", v)
+		log.Fatalf("can't parse %v as URL: %v", v, err)
 	}
 	return url
 }
@@ -31,19 +32,25 @@ func mustParseURL(v string) *url.URL {
 func mustAtoi(v string) int {
 	i, err := strconv.Atoi(v)
 	if err != nil {
-		log.Fatalf("can't convert %v to int", v)
+		log.Fatalf("can't convert %v to int: %v", v, err)
 	}
 	return i
 }
 
 var (
+	// https://docs.travis-ci.com/user/environment-variables/#Default-Environment-Variables
 	travisEndpoint = mustParseURL(mustGetenv("TRAVIS_ENDPOINT"))
 	travisToken    = mustGetenv("TRAVIS_TOKEN")
 
 	travisBuildID = mustAtoi(mustGetenv("TRAVIS_BUILD_ID"))
 
-	travisBranch   = mustGetenv("TRAVIS_BRANCH")
-	travisRepoSlug = mustGetenv("TRAVIS_REPO_SLUG")
+	travisEventType = mustGetenv("TRAVIS_EVENT_TYPE")
+	travisBranch    = mustGetenv("TRAVIS_BRANCH")
+	travisRepoSlug  = mustGetenv("TRAVIS_REPO_SLUG")
+
+	// Comma-separated list of branches to limit to one build.
+	// If unset or empty, limit *all* branches to one build.
+	onebuildBranches = strings.Split(os.Getenv("ONEBUILD_BRANCHES"), ",")
 )
 
 // https://developer.travis-ci.org/resource/build#Build
@@ -63,7 +70,8 @@ type Builds struct {
 	Builds []Build
 }
 
-// If bodyValue is non-nil, decode body as JSON into it.
+// If bodyValue is non-nil, decodes body as JSON into it.
+// Exits on error.
 func callTravisAPI(method, path string, expectStatus int, bodyValue interface{}) {
 	url := travisEndpoint.ResolveReference(mustParseURL(path))
 	req, err := http.NewRequest(method, url.String(), nil)
@@ -97,8 +105,9 @@ func callTravisAPI(method, path string, expectStatus int, bodyValue interface{})
 // - of this branch
 // - started by a `push` event
 // - with a state in `states`, or in any state if `states` is empty
-// - that sorts first by `sortBy`.
-// Panics on error or if no matching build is found.
+// - that sorts first by `sortBy`, as interpreted by the Travis API.
+// Exits on error or if no matching build is found.
+// https://developer.travis-ci.com/resource/builds#find
 func firstMatchingBuild(states, sortBy string) Build {
 	vs := url.Values{}
 	vs.Add("build.event_type", "push")
@@ -150,11 +159,33 @@ func restartBuild(id int) {
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		log.Fatalf("Usage: %v {start|finish}\n", os.Args[0])
+	// Ignore non-push builds.
+	if travisEventType != "push" {
+		log.Print("Not a push build. Exiting.")
+		os.Exit(0)
 	}
 
-	command := os.Args[1]
+	// If ONEBUILD_BRANCHES is set, ignore branches not in that list.
+	if len(onebuildBranches) > 0 {
+		found := false
+		for _, b := range onebuildBranches {
+			if b == travisBranch {
+				found := true
+				break
+			}
+		}
+
+		if !found {
+			log.Printf("Branch %v not in %v. Exiting.", travisBranch, onebuildBranches)
+			os.Exit(0)
+		}
+	}
+
+	command := ""
+	if len(os.Args) > 1 {
+		command = os.Args[1]
+	}
+
 	switch command {
 	case "start":
 		// Check we're the running build with the earliest start time.
@@ -182,6 +213,6 @@ func main() {
 		}
 
 	default:
-		log.Fatalf("Invalid command %v\n", command)
+		log.Fatalf("Usage: %v {start|finish}\n", os.Args[0])
 	}
 }
