@@ -135,12 +135,12 @@ func newestBuild() Build {
 }
 
 func cancelThisBuild() {
-	log.Print("Canceling this build...")
+	log.Print("Cancelling this build...")
 
 	path := fmt.Sprintf("/build/%v/cancel", travisBuildID)
 	callTravisAPI("POST", path, http.StatusAccepted, nil)
 
-	// Wait for the build to be canceled. Travis' build timeout is 2 hours.
+	// Wait for the build to be cancelled. Travis' build timeout is 2 hours.
 	time.Sleep(3 * time.Hour)
 }
 
@@ -174,10 +174,10 @@ func main() {
 		// Okay to proceed.
 
 	case "finish":
-		// Restart the newest queued build if it is canceled.
+		// Restart the newest queued build if it is cancelled.
 		newest := newestBuild()
-		if newest.State == "canceled" {
-			log.Printf("Restarting canceled build %v (%v)\n", newest.Number, newest.ID)
+		if newest.State == "canceled" /* [sic] */ {
+			log.Printf("Restarting cancelled build %v (%v)\n", newest.Number, newest.ID)
 			restartBuild(newest.ID)
 		}
 
